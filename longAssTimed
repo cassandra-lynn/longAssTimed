@@ -5,3 +5,49 @@
 #
 # script originally written by lizardthunder in 2016
 # https://github.com/lizardthunder/longAssTimed
+
+### variables
+max_time=60 # time the script will allow a cmnd to run for before notifying you
+watchlist=( )
+
+### helper functions
+# shamelessly stolen from http://stackoverflow.com/questions/3685970/check-if-an-array-contains-a-value
+elementIn () {
+  local e
+  for e in "${@:2}"; do [[ "$e" == "$1" ]] && return 0; done
+  return 1
+}
+
+alert () {
+    #TODO: make it do something other than fucking echo to the terminal
+    echo "$1 is done!"
+}
+
+### main
+
+while true; do
+    ps_output=$(ps -eo pid,etimes,tty,cmd)
+    for pid in $(echo "$ps_output" | while read pid etimes term cmd; do
+        [ "$etimes" == "ELAPSED" ] && continue 
+        if [ $etimes -gt $max_time ] && echo $term | grep -q pts; then
+            if ! elementIn $pid "${watchlist[@]}"; then
+                echo $pid
+            fi
+        fi 
+    done); do
+        watchlist+=($pid)
+    done 
+    #TODO: make these two loops separate functions so it looks nicer
+    for process in ${watchlist[@]}; do
+        if ! test -d "/proc/$process"; then
+            #TODO: fix this so alert *always* gets an input! sometimes, it alerts with no name!
+            alert $(echo "$ps_output" | grep "^$pid" | sed "s/^[0-9]*[[:space:]]*[0-9]*[[:space:]]*pts\/[0-9]*[[:space:]]*//")
+            tmp_watchlist=( )
+            for pid in "${watchlist[@]}"; do
+                [[ $pid != $process ]] && tmp_watchlist+=($pid)
+            done
+            watchlist=("${tmp_watchlist[@]}")
+        fi
+    done
+    sleep 1
+done
